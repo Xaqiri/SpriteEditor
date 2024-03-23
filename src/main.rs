@@ -1,3 +1,5 @@
+use std::{fs::File, io::Write};
+
 use macroquad::{
     prelude::*,
     ui::{root_ui, widgets},
@@ -93,6 +95,11 @@ fn draw_ui(canvas: &mut Canvas, color: &mut Color) {
         y: 160.0,
     }));
 
+    let save = widgets::Button::new("Save").position(Some(Vec2 {
+        x: WIDTH - 100.0,
+        y: 185.0,
+    }));
+
     draw_line(WIDTH - 100. - 5., 0., WIDTH - 100. - 5., HEIGHT, 5., BLACK);
     if reset.ui(&mut root_ui()) {
         *canvas = vec![vec![BLACK; PIXELS]; PIXELS];
@@ -115,6 +122,31 @@ fn draw_ui(canvas: &mut Canvas, color: &mut Color) {
     if cyan.ui(&mut root_ui()) {
         *color = CYAN;
     }
+    if save.ui(&mut root_ui()) {
+        export(canvas.to_owned());
+    }
+}
+
+fn export(canvas: Canvas) {
+    let mut file = File::create("../images/image.ppm").unwrap();
+    if let Err(e) = file.write_all(format!("P3\n{} {}\n255\n\n", PIXELS, PIXELS).as_bytes()) {
+        println!("{}", e);
+    }
+    for y in 0..canvas.len() {
+        for x in 0..canvas[0].len() {
+            let row = format!(
+                "{} {} {} ",
+                (canvas[y][x].r * 255.) as i32,
+                (canvas[y][x].g * 255.) as i32,
+                (canvas[y][x].b * 255.) as i32
+            );
+            let err = file.write_all(row.as_bytes());
+            if let Err(e) = err {
+                println!("{}", e);
+            }
+        }
+    }
+    println!("SAVED");
 }
 
 #[macroquad::main("Sprite Editor")]
