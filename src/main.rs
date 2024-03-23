@@ -1,4 +1,9 @@
-use std::{fs::File, io::Write};
+use std::{
+    env,
+    fs::File,
+    io::{self, BufRead, Write},
+    path::Path,
+};
 
 use macroquad::{
     prelude::*,
@@ -7,11 +12,12 @@ use macroquad::{
 
 type Canvas = Vec<Vec<Color>>;
 
-const WIDTH: f32 = 800.0;
-const HEIGHT: f32 = 600.0;
+const WIDTH: f32 = 1000.0;
+const HEIGHT: f32 = 800.0;
 const PIXELS: usize = 8;
-const SCALE: usize = 6;
-const GAP: usize = 5;
+const PIXEL_SIZE: usize = 1;
+const SCALE: usize = 40;
+const GAP: usize = 1;
 const DARK_GRAY: Color = Color {
     r: 0.2,
     g: 0.2,
@@ -29,9 +35,9 @@ fn handle_click(canvas: &mut Canvas, color: Color) {
     let pos = mouse_position();
     for y in 0..canvas.len() {
         for x in 0..canvas[0].len() {
-            let left = ((PIXELS * SCALE + GAP) * x) as f32 + GAP as f32;
-            let top = ((PIXELS * SCALE + GAP) * y) as f32 + GAP as f32;
-            let len = (PIXELS * SCALE) as f32;
+            let left = ((PIXEL_SIZE * SCALE + GAP) * x) as f32 + GAP as f32;
+            let top = ((PIXEL_SIZE * SCALE + GAP) * y) as f32 + GAP as f32;
+            let len = (PIXEL_SIZE * SCALE) as f32;
             if pos.0 > left
                 && pos.0 < left + len
                 && pos.1 > top
@@ -49,9 +55,9 @@ fn draw_canvas(canvas: &Canvas, color: Color) {
 
     for y in 0..canvas.len() {
         for x in 0..canvas[0].len() {
-            let left = ((PIXELS * SCALE + GAP) * x) as f32 + GAP as f32;
-            let top = ((PIXELS * SCALE + GAP) * y) as f32 + GAP as f32;
-            let len = (PIXELS * SCALE) as f32;
+            let left = ((PIXEL_SIZE * SCALE + GAP) * x) as f32 + GAP as f32;
+            let top = ((PIXEL_SIZE * SCALE + GAP) * y) as f32 + GAP as f32;
+            let len = (PIXEL_SIZE * SCALE) as f32;
             let cell_color;
             if pos.0 > left && pos.0 < left + len && pos.1 > top && pos.1 < top + len {
                 cell_color = Color {
@@ -70,7 +76,7 @@ fn draw_canvas(canvas: &Canvas, color: Color) {
     }
 }
 
-fn draw_ui(canvas: &mut Canvas, color: &mut Color) {
+fn draw_ui(canvas: &mut Canvas, color: &mut Color, file_name: &String) {
     draw_line(WIDTH - 100. - 5., 0., WIDTH - 100. - 5., HEIGHT, 5., BLACK);
     let buttons = vec![
         "reset", "black", "red", "green", "yellow", "blue", "purple", "cyan", "white", "save",
@@ -119,12 +125,42 @@ fn draw_ui(canvas: &mut Canvas, color: &mut Color) {
         *color = WHITE;
     }
     if save.ui(&mut root_ui()) {
-        export(canvas.to_owned());
+        export(canvas.to_owned(), file_name);
     }
 }
 
-fn export(canvas: Canvas) {
-    let mut file = File::create("../images/image.ppm").unwrap();
+fn import(file_name: &String) -> Canvas {
+    let file = File::open(file_name);
+    let mut canvas = vec![vec![BLACK; PIXELS]; PIXELS];
+    match file {
+        Ok(f) => {
+            let lines = io::BufReader::new(f).lines();
+            for line in lines.flatten().enumerate() {
+                if line.0 >= 4 {
+                    let l: Vec<&str> = line.1.trim_end().split(" ").collect();
+                    let mut x = 0;
+                    for i in (0..l.len() - 1).step_by(3) {
+                        let c = Color {
+                            r: (l[i].parse::<f32>().unwrap() / 255. * 100.).round() / 100.,
+                            g: (l[i + 1].parse::<f32>().unwrap() as f32 / 255. * 100.).round()
+                                / 100.,
+                            b: (l[i + 2].parse::<f32>().unwrap() as f32 / 255. * 100.).round()
+                                / 100.,
+                            a: 1.,
+                        };
+                        canvas[line.0 - 4][x] = c;
+                        x += 1;
+                    }
+                }
+            }
+            canvas
+        }
+        Err(e) => canvas,
+    }
+}
+
+fn export(canvas: Canvas, file_name: &String) {
+    let mut file = File::create(file_name).unwrap();
     if let Err(e) = file.write_all(format!("P3\n{} {}\n255\n\n", PIXELS, PIXELS).as_bytes()) {
         println!("{}", e);
     }
@@ -141,6 +177,7 @@ fn export(canvas: Canvas) {
                 println!("{}", e);
             }
         }
+        file.write_all(b"\n").ok();
     }
     println!("SAVED");
 }
@@ -149,12 +186,26 @@ fn export(canvas: Canvas) {
 async fn main() {
     let mut canvas = vec![vec![BLACK; PIXELS]; PIXELS];
     let mut color = PURPLE;
+    let mut file_name = &"".to_string();
+    let args: Vec<String> = env::args().collect();
+    if args.len() == 2 {
+        if let Some(s) = args.last() {
+            file_name = s;
+            if Path::new(s).extension().unwrap() != "ppm" {
+                panic!("Invalid file type");
+            }
+            canvas = import(file_name);
+            dbg!(file_name);
+        }
+    } else {
+        panic!("Must provide a file path");
+    }
     loop {
         request_new_screen_size(WIDTH, HEIGHT);
         clear_background(DARK_GRAY);
         handle_click(&mut canvas, color);
         draw_canvas(&canvas, color);
-        draw_ui(&mut canvas, &mut color);
+        draw_ui(&mut canvas, &mut color, file_name);
         next_frame().await
     }
 }
