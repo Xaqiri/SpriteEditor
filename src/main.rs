@@ -74,7 +74,7 @@ fn draw_canvas(canvas: &Canvas, color: Color, scale: usize) {
     }
 }
 
-fn draw_ui(canvas: &mut Canvas, color: &mut Color, file_name: &String) {
+fn draw_ui(canvas: &mut Canvas, init_canvas: &mut Canvas, color: &mut Color, file_name: &String) {
     draw_line(WIDTH - 100. - 5., 0., WIDTH - 100. - 5., HEIGHT, 5., BLACK);
     let buttons = vec![
         "reset", "black", "red", "green", "yellow", "blue", "purple", "cyan", "white", "save",
@@ -96,7 +96,7 @@ fn draw_ui(canvas: &mut Canvas, color: &mut Color, file_name: &String) {
     let reset = button_list.remove(0);
 
     if reset.ui(&mut root_ui()) {
-        *canvas = vec![vec![BLACK; canvas[0].len()]; canvas.len()];
+        *canvas = init_canvas.clone();
     }
     if black.ui(&mut root_ui()) {
         *color = BLACK;
@@ -191,6 +191,7 @@ async fn main() {
     let mut pixels = 8;
     let mut color = PURPLE;
     let mut file_name = &"".to_string();
+    let mut init_canvas = vec![vec![BLACK; pixels]; pixels];
     let mut canvas = vec![vec![BLACK; pixels]; pixels];
     let args: Vec<String> = env::args().collect();
     if args.len() == 2 {
@@ -200,6 +201,7 @@ async fn main() {
                 panic!("Invalid file type");
             }
             canvas = import(file_name);
+            init_canvas = canvas.clone();
         }
     } else if args.len() == 4 && args[2] == "-d" {
         let arg = args[3].parse::<usize>();
@@ -223,7 +225,7 @@ async fn main() {
         clear_background(DARK_GRAY);
         handle_click(&mut canvas, color, scale);
         draw_canvas(&canvas, color, scale);
-        draw_ui(&mut canvas, &mut color, file_name);
+        draw_ui(&mut canvas, &mut init_canvas, &mut color, file_name);
         next_frame().await
     }
 }
