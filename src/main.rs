@@ -77,26 +77,31 @@ async fn draw_ui(
 ) {
     draw_line(WIDTH - 100. - 5., 0., WIDTH - 100. - 5., HEIGHT, 5., BLACK);
     let buttons = vec![
-        "reset", "black", "red", "green", "yellow", "blue", "purple", "cyan", "white", "save",
+        "reset", "clear", "black", "red", "green", "yellow", "blue", "purple", "cyan", "white",
+        "save",
     ];
     let mut button_list: Vec<widgets::Button<'_>> = vec![];
     buttons.into_iter().enumerate().for_each(|(i, s)| {
         button_list
             .push(widgets::Button::new(s).position(vec2(WIDTH - 100., i as f32 * 25. + 10.)));
     });
-    let save = button_list.remove(9);
-    let white = button_list.remove(8);
-    let cyan = button_list.remove(7);
-    let purple = button_list.remove(6);
-    let blue = button_list.remove(5);
-    let yellow = button_list.remove(4);
-    let green = button_list.remove(3);
-    let red = button_list.remove(2);
-    let black = button_list.remove(1);
+    let save = button_list.remove(10);
+    let white = button_list.remove(9);
+    let cyan = button_list.remove(8);
+    let purple = button_list.remove(7);
+    let blue = button_list.remove(6);
+    let yellow = button_list.remove(5);
+    let green = button_list.remove(4);
+    let red = button_list.remove(3);
+    let black = button_list.remove(2);
+    let clear = button_list.remove(1);
     let reset = button_list.remove(0);
 
     if reset.ui(&mut root_ui()) {
         *canvas = init_canvas.clone();
+    }
+    if clear.ui(&mut root_ui()) {
+        *canvas = vec![vec![BLACK; canvas.len()]; canvas[0].len()]
     }
     if black.ui(&mut root_ui()) {
         *color = BLACK;
