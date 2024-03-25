@@ -1,9 +1,4 @@
-use std::{
-    env,
-    fs::File,
-    io::{self, BufRead, Write},
-    path::Path,
-};
+use std::{env, path::Path};
 
 use macroquad::{
     prelude::*,
@@ -74,7 +69,12 @@ fn draw_canvas(canvas: &Canvas, color: Color, scale: usize) {
     }
 }
 
-fn draw_ui(canvas: &mut Canvas, init_canvas: &mut Canvas, color: &mut Color, file_name: &String) {
+async fn draw_ui(
+    canvas: &mut Canvas,
+    init_canvas: &mut Canvas,
+    color: &mut Color,
+    file_name: &String,
+) {
     draw_line(WIDTH - 100. - 5., 0., WIDTH - 100. - 5., HEIGHT, 5., BLACK);
     let buttons = vec![
         "reset", "black", "red", "green", "yellow", "blue", "purple", "cyan", "white", "save",
@@ -123,35 +123,27 @@ fn draw_ui(canvas: &mut Canvas, init_canvas: &mut Canvas, color: &mut Color, fil
         *color = WHITE;
     }
     if save.ui(&mut root_ui()) {
-        export(canvas.to_owned(), file_name);
+        export(canvas.to_owned(), file_name).await;
     }
 }
 
-fn import(file_name: &String) -> Canvas {
-    let file = File::open(file_name);
-    match file {
-        Ok(f) => {
-            let lines: Vec<String> = io::BufReader::new(&f)
-                .lines()
-                .map(|l| l.expect("No"))
-                .collect();
-
-            let line: Vec<&str> = lines[4].trim_end().split(" ").collect();
-            let width = line.len() / 3;
-            let height = lines.len() - 4;
+async fn import(file_name: &String) -> Canvas {
+    let img = load_image(file_name).await;
+    match img {
+        Ok(img) => {
+            let width = img.width();
+            let height = img.height();
             let mut canvas = vec![vec![BLACK; width]; height];
-            for line in 4..lines.len() {
-                let l: Vec<&str> = lines[line].trim_end().split(" ").collect();
-                let mut x = 0;
-                for i in (0..l.len() - 1).step_by(3) {
+            for y in 0..height {
+                for x in 0..width {
+                    let c = img.get_pixel(x as u32, y as u32);
                     let c = Color {
-                        r: (l[i].parse::<f32>().unwrap() / 255. * 100.).round() / 100.,
-                        g: (l[i + 1].parse::<f32>().unwrap() as f32 / 255. * 100.).round() / 100.,
-                        b: (l[i + 2].parse::<f32>().unwrap() as f32 / 255. * 100.).round() / 100.,
+                        r: (c.r * 100.).round() / 100.,
+                        g: (c.g as f32 * 100.).round() / 100.,
+                        b: (c.b as f32 * 100.).round() / 100.,
                         a: 1.,
                     };
-                    canvas[line - 4][x] = c;
-                    x += 1;
+                    canvas[y][x] = c;
                 }
             }
             canvas
@@ -160,29 +152,24 @@ fn import(file_name: &String) -> Canvas {
     }
 }
 
-fn export(canvas: Canvas, file_name: &String) {
+async fn export(canvas: Canvas, file_name: &String) {
     println!("{}", file_name);
-    let mut file = File::create(file_name).unwrap();
-    if let Err(e) =
-        file.write_all(format!("P3\n{} {}\n255\n\n", canvas[0].len(), canvas.len()).as_bytes())
-    {
-        println!("{}", e);
-    }
-    for y in 0..canvas.len() {
-        for x in 0..canvas[0].len() {
-            let row = format!(
-                "{} {} {} ",
-                (canvas[y][x].r * 255.) as i32,
-                (canvas[y][x].g * 255.) as i32,
-                (canvas[y][x].b * 255.) as i32
+
+    let height = canvas.len() as i32;
+    let width = canvas.len() as i32;
+    let mut a = Image::gen_image_color(width as u16, height as u16, BLACK);
+    for y in 0..height as usize {
+        for x in 0..width as usize {
+            a.set_pixel(
+                x as u32,
+                (y as i32 - (height - 1)).abs() as u32,
+                canvas[y][x],
             );
-            let err = file.write_all(row.as_bytes());
-            if let Err(e) = err {
-                println!("{}", e);
-            }
         }
-        file.write_all(b"\n").ok();
     }
+
+    a.export_png(file_name);
+
     println!("SAVED");
 }
 
@@ -197,10 +184,10 @@ async fn main() {
     if args.len() == 2 {
         if let Some(s) = args.last() {
             file_name = s;
-            if Path::new(s).extension().unwrap() != "ppm" {
+            if Path::new(s).extension().unwrap() != "png" {
                 panic!("Invalid file type");
             }
-            canvas = import(file_name);
+            canvas = import(file_name).await;
             init_canvas = canvas.clone();
         }
     } else if args.len() == 4 && args[2] == "-d" {
@@ -225,7 +212,7 @@ async fn main() {
         clear_background(DARK_GRAY);
         handle_click(&mut canvas, color, scale);
         draw_canvas(&canvas, color, scale);
-        draw_ui(&mut canvas, &mut init_canvas, &mut color, file_name);
+        draw_ui(&mut canvas, &mut init_canvas, &mut color, file_name).await;
         next_frame().await
     }
 }
