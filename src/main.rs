@@ -1,4 +1,4 @@
-use std::{env, path::Path};
+use std::{collections::HashMap, env, path::Path};
 
 use macroquad::{
     prelude::*,
@@ -25,19 +25,16 @@ const CYAN: Color = Color {
     a: 1.,
 };
 
-fn handle_click(canvas: &mut Canvas, color: Color, scale: usize) {
+fn handle_click(canvas: &mut Canvas, color: Color, scale: usize, pressed: bool) {
     let pos = mouse_position();
     for y in 0..canvas.len() {
         for x in 0..canvas[0].len() {
             let left = ((PIXEL_SIZE * scale + GAP) * x) as f32 + GAP as f32;
             let top = ((PIXEL_SIZE * scale + GAP) * y) as f32 + GAP as f32;
             let len = (PIXEL_SIZE * scale) as f32;
-            if pos.0 > left
-                && pos.0 < left + len
-                && pos.1 > top
-                && pos.1 < top + len
-                && is_mouse_button_pressed(MouseButton::Left)
+            if pos.0 > left && pos.0 < (left + len) && pos.1 > top && pos.1 < (top + len) && pressed
             {
+                println!("{} {} {}", pressed, x, y);
                 canvas[y][x] = if canvas[y][x] == color { BLACK } else { color };
             }
         }
@@ -168,7 +165,16 @@ async fn export(canvas: Canvas, file_name: &String) {
             a.set_pixel(
                 x as u32,
                 (y as i32 - (height - 1)).abs() as u32,
-                canvas[y][x],
+                if canvas[y][x] == BLACK {
+                    Color {
+                        r: 0.0,
+                        g: 0.0,
+                        b: 0.0,
+                        a: 0.0,
+                    }
+                } else {
+                    canvas[y][x]
+                },
             );
         }
     }
@@ -176,6 +182,207 @@ async fn export(canvas: Canvas, file_name: &String) {
     a.export_png(file_name);
 
     println!("SAVED");
+}
+
+async fn load_font() -> HashMap<String, Texture2D> {
+    let mut font: HashMap<String, Texture2D> = HashMap::new();
+    for i in 'A'..='Z' {
+        let file_name = format!("../images/{}.png", i);
+        let img = load_image(&file_name).await;
+
+        if let Ok(img) = img {
+            let t = Texture2D::from_image(&img);
+            t.set_filter(FilterMode::Nearest);
+            font.insert(i.to_string(), t);
+        }
+    }
+    for i in 'a'..='z' {
+        let file_name = format!("../images/{}_lower.png", i);
+        let img = load_image(&file_name).await;
+
+        if let Ok(img) = img {
+            let t = Texture2D::from_image(&img);
+            t.set_filter(FilterMode::Nearest);
+            font.insert(i.to_string(), t);
+        }
+    }
+    let file_name = "../images/space.png";
+    let img = load_image(&file_name).await;
+
+    if let Ok(img) = img {
+        let t = Texture2D::from_image(&img);
+        t.set_filter(FilterMode::Nearest);
+        font.insert("space".to_string(), t);
+    }
+
+    let file_name = "../images/minus.png";
+    let img = load_image(&file_name).await;
+
+    if let Ok(img) = img {
+        let t = Texture2D::from_image(&img);
+        t.set_filter(FilterMode::Nearest);
+        font.insert("minus".to_string(), t);
+    }
+
+    let file_name = "../images/colon.png";
+    let img = load_image(&file_name).await;
+
+    if let Ok(img) = img {
+        let t = Texture2D::from_image(&img);
+        t.set_filter(FilterMode::Nearest);
+        font.insert("colon".to_string(), t);
+    }
+
+    let file_name = "../images/semicolon.png";
+    let img = load_image(&file_name).await;
+
+    if let Ok(img) = img {
+        let t = Texture2D::from_image(&img);
+        t.set_filter(FilterMode::Nearest);
+        font.insert("semicolon".to_string(), t);
+    }
+
+    let file_name = "../images/lparen.png";
+    let img = load_image(&file_name).await;
+
+    if let Ok(img) = img {
+        let t = Texture2D::from_image(&img);
+        t.set_filter(FilterMode::Nearest);
+        font.insert("lparen".to_string(), t);
+    }
+
+    let file_name = "../images/rparen.png";
+    let img = load_image(&file_name).await;
+
+    if let Ok(img) = img {
+        let t = Texture2D::from_image(&img);
+        t.set_filter(FilterMode::Nearest);
+        font.insert("rparen".to_string(), t);
+    }
+
+    let file_name = "../images/star.png";
+    let img = load_image(&file_name).await;
+
+    if let Ok(img) = img {
+        let t = Texture2D::from_image(&img);
+        t.set_filter(FilterMode::Nearest);
+        font.insert("star".to_string(), t);
+    }
+
+    let file_name = "../images/forward_slash.png";
+    let img = load_image(&file_name).await;
+
+    if let Ok(img) = img {
+        let t = Texture2D::from_image(&img);
+        t.set_filter(FilterMode::Nearest);
+        font.insert("forward_slash".to_string(), t);
+    }
+
+    let file_name = "../images/period.png";
+    let img = load_image(&file_name).await;
+
+    if let Ok(img) = img {
+        let t = Texture2D::from_image(&img);
+        t.set_filter(FilterMode::Nearest);
+        font.insert("period".to_string(), t);
+    }
+
+    let file_name = "../images/underscore.png";
+    let img = load_image(&file_name).await;
+
+    if let Ok(img) = img {
+        let t = Texture2D::from_image(&img);
+        t.set_filter(FilterMode::Nearest);
+        font.insert("underscore".to_string(), t);
+    }
+
+    font
+}
+
+async fn test(font: &HashMap<String, Texture2D>, file_name: &String, pixels: f32) {
+    let mut test_text: Vec<Texture2D> = vec![];
+    for i in file_name.chars() {
+        if i.is_ascii_alphabetic() {
+            let t = font.get(&i.to_string());
+            if let Some(c) = t {
+                test_text.push(c.clone());
+            }
+        } else if i.is_whitespace() {
+            let space = font.get("space").unwrap();
+            test_text.push(space.to_owned());
+        } else {
+            match i {
+                ':' => {
+                    let icon = font.get("colon").unwrap();
+                    test_text.push(icon.to_owned());
+                }
+                ';' => {
+                    let icon = font.get("semicolon").unwrap();
+                    test_text.push(icon.to_owned());
+                }
+                '-' => {
+                    let icon = font.get("minus").unwrap();
+                    test_text.push(icon.to_owned());
+                }
+                '(' => {
+                    let icon = font.get("lparen").unwrap();
+                    test_text.push(icon.to_owned());
+                }
+                ')' => {
+                    let icon = font.get("rparen").unwrap();
+                    test_text.push(icon.to_owned());
+                }
+                '*' => {
+                    let icon = font.get("star").unwrap();
+                    test_text.push(icon.to_owned());
+                }
+                '.' => {
+                    let icon = font.get("period").unwrap();
+                    test_text.push(icon.to_owned());
+                }
+                '/' => {
+                    let icon = font.get("forward_slash").unwrap();
+                    test_text.push(icon.to_owned());
+                }
+                '_' => {
+                    let icon = font.get("underscore").unwrap();
+                    test_text.push(icon.to_owned());
+                }
+                _ => println!("{} Not implemented", i),
+            }
+        }
+    }
+    let size = 24.;
+    let x = 0.;
+    let y = HEIGHT - size - 30.;
+    let gap = 0.;
+
+    draw_rectangle(1., y - 1., CANVAS_AREA as f32 - pixels + 1., 50., BLACK);
+    let file_name = "../images/green_block.png";
+    let img = load_image(&file_name).await;
+    let cursor: Texture2D;
+
+    if let Ok(img) = img {
+        cursor = Texture2D::from_image(&img);
+        cursor.set_filter(FilterMode::Nearest);
+    }
+
+    for i in 0..test_text.len() {
+        draw_texture_ex(
+            &test_text[i],
+            x + size * i as f32,
+            y,
+            WHITE,
+            DrawTextureParams {
+                dest_size: Some(Vec2 { x: size, y: size }),
+                source: None,
+                rotation: 0.,
+                flip_x: false,
+                flip_y: false,
+                pivot: None,
+            },
+        );
+    }
 }
 
 #[macroquad::main("Sprite Editor")]
@@ -204,7 +411,7 @@ async fn main() {
             Err(e) => panic!("{}", e),
         }
         file_name = &args[1];
-        if Path::new(file_name).extension().unwrap() != "ppm" {
+        if Path::new(file_name).extension().unwrap() != "png" {
             panic!("Invalid file type");
         }
         canvas = vec![vec![BLACK; pixels]; pixels]
@@ -212,12 +419,15 @@ async fn main() {
         panic!("Must provide a file path");
     }
     let scale = (CANVAS_AREA - canvas.len()) / canvas.len();
+    let font = load_font().await;
     loop {
+        let pressed = is_mouse_button_pressed(MouseButton::Left);
         request_new_screen_size(WIDTH, HEIGHT);
         clear_background(DARK_GRAY);
-        handle_click(&mut canvas, color, scale);
+        handle_click(&mut canvas, color, scale, pressed);
         draw_canvas(&canvas, color, scale);
         draw_ui(&mut canvas, &mut init_canvas, &mut color, file_name).await;
+        test(&font, file_name, pixels as f32).await;
         next_frame().await
     }
 }
