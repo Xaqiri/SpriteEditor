@@ -6,11 +6,12 @@ use macroquad::{
 };
 
 type Canvas = Vec<Vec<Color>>;
-
 const WIDTH: f32 = 900.0;
 const HEIGHT: f32 = 800.0;
-const CANVAS_AREA: usize = 750;
 const PIXEL_SIZE: usize = 1;
+const FONT_SIZE: f32 = 8. * 3.;
+const CMD_AREA: f32 = FONT_SIZE * 2. + 4.;
+const CANVAS_AREA: usize = (HEIGHT - CMD_AREA) as usize;
 const GAP: usize = 1;
 const DARK_GRAY: Color = Color {
     r: 0.2,
@@ -25,16 +26,35 @@ const CYAN: Color = Color {
     a: 1.,
 };
 
-fn handle_click(canvas: &mut Canvas, color: Color, scale: usize, pressed: bool) {
+struct Cell {
+    left: f32,
+    top: f32,
+    len: f32,
+}
+
+impl Cell {
+    fn new(scale: usize, x: usize, y: usize) -> Self {
+        Cell {
+            left: ((PIXEL_SIZE * scale + GAP) * x) as f32 + GAP as f32,
+            top: ((PIXEL_SIZE * scale + GAP) * y) as f32 + GAP as f32,
+            len: (PIXEL_SIZE * scale) as f32,
+        }
+    }
+    fn hovered(&self, pos: (f32, f32)) -> bool {
+        pos.0 > self.left
+            && pos.0 < (self.left + self.len)
+            && pos.1 > self.top
+            && pos.1 < (self.top + self.len)
+    }
+}
+
+fn handle_click(canvas: &mut Canvas, color: Color, scale: usize) {
     let pos = mouse_position();
+    let pressed = is_mouse_button_pressed(MouseButton::Left);
     for y in 0..canvas.len() {
         for x in 0..canvas[0].len() {
-            let left = ((PIXEL_SIZE * scale + GAP) * x) as f32 + GAP as f32;
-            let top = ((PIXEL_SIZE * scale + GAP) * y) as f32 + GAP as f32;
-            let len = (PIXEL_SIZE * scale) as f32;
-            if pos.0 > left && pos.0 < (left + len) && pos.1 > top && pos.1 < (top + len) && pressed
-            {
-                println!("{} {} {}", pressed, x, y);
+            let cell = Cell::new(scale, x, y);
+            if cell.hovered(pos) && pressed {
                 canvas[y][x] = if canvas[y][x] == color { BLACK } else { color };
             }
         }
@@ -45,11 +65,9 @@ fn draw_canvas(canvas: &Canvas, color: Color, scale: usize) {
     let pos = mouse_position();
     for y in 0..canvas.len() {
         for x in 0..canvas[0].len() {
-            let left = ((PIXEL_SIZE * scale + GAP) * x) as f32 + GAP as f32;
-            let top = ((PIXEL_SIZE * scale + GAP) * y) as f32 + GAP as f32;
-            let len = (PIXEL_SIZE * scale) as f32;
             let cell_color;
-            if pos.0 > left && pos.0 < left + len && pos.1 > top && pos.1 < top + len {
+            let cell = Cell::new(scale, x, y);
+            if cell.hovered(pos) {
                 cell_color = Color {
                     r: color.r,
                     g: color.g,
@@ -61,7 +79,7 @@ fn draw_canvas(canvas: &Canvas, color: Color, scale: usize) {
             } else {
                 cell_color = BLACK;
             }
-            draw_rectangle(left, top, len, len, cell_color);
+            draw_rectangle(cell.left, cell.top, cell.len, cell.len, cell_color);
         }
     }
 }
@@ -352,12 +370,16 @@ async fn test(font: &HashMap<String, Texture2D>, file_name: &String, pixels: f32
             }
         }
     }
-    let size = 24.;
     let x = 0.;
-    let y = HEIGHT - size - 30.;
-    let gap = 0.;
+    let y = (CANVAS_AREA) as f32;
 
-    draw_rectangle(1., y - 1., CANVAS_AREA as f32 - pixels + 1., 50., BLACK);
+    draw_rectangle(
+        GAP as f32,
+        y - 3.,
+        CANVAS_AREA as f32 - pixels + GAP as f32,
+        CMD_AREA,
+        BLACK,
+    );
     let file_name = "../images/green_block.png";
     let img = load_image(&file_name).await;
     let cursor: Texture2D;
@@ -370,11 +392,14 @@ async fn test(font: &HashMap<String, Texture2D>, file_name: &String, pixels: f32
     for i in 0..test_text.len() {
         draw_texture_ex(
             &test_text[i],
-            x + size * i as f32,
+            x + FONT_SIZE * i as f32,
             y,
             WHITE,
             DrawTextureParams {
-                dest_size: Some(Vec2 { x: size, y: size }),
+                dest_size: Some(Vec2 {
+                    x: FONT_SIZE,
+                    y: FONT_SIZE,
+                }),
                 source: None,
                 rotation: 0.,
                 flip_x: false,
@@ -421,10 +446,9 @@ async fn main() {
     let scale = (CANVAS_AREA - canvas.len()) / canvas.len();
     let font = load_font().await;
     loop {
-        let pressed = is_mouse_button_pressed(MouseButton::Left);
         request_new_screen_size(WIDTH, HEIGHT);
         clear_background(DARK_GRAY);
-        handle_click(&mut canvas, color, scale, pressed);
+        handle_click(&mut canvas, color, scale);
         draw_canvas(&canvas, color, scale);
         draw_ui(&mut canvas, &mut init_canvas, &mut color, file_name).await;
         test(&font, file_name, pixels as f32).await;
