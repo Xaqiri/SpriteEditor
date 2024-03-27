@@ -6,13 +6,20 @@ use macroquad::{
 };
 
 type Canvas = Vec<Vec<Color>>;
-const WIDTH: f32 = 900.0;
-const HEIGHT: f32 = 800.0;
+const SCALE: f32 = 1.5;
+const WIDTH: f32 = 640. * SCALE;
+const HEIGHT: f32 = 480. * SCALE;
 const PIXEL_SIZE: usize = 1;
 const FONT_SIZE: f32 = 8. * 3.;
-const CMD_AREA: f32 = FONT_SIZE * 2. + 4.;
+const CMD_AREA: f32 = FONT_SIZE * 2. + 6.;
 const CANVAS_AREA: usize = (HEIGHT - CMD_AREA) as usize;
 const GAP: usize = 1;
+const TRANSPARENT_BG: Color = Color {
+    r: 1.0,
+    g: 0.0,
+    b: 1.0,
+    a: 0.1,
+};
 const DARK_GRAY: Color = Color {
     r: 0.2,
     g: 0.2,
@@ -30,16 +37,19 @@ struct Cell {
     left: f32,
     top: f32,
     len: f32,
+    color: Color,
 }
 
 impl Cell {
     fn new(scale: usize, x: usize, y: usize) -> Self {
         Cell {
-            left: ((PIXEL_SIZE * scale + GAP) * x) as f32 + GAP as f32,
-            top: ((PIXEL_SIZE * scale + GAP) * y) as f32 + GAP as f32,
+            left: ((PIXEL_SIZE * scale) * x) as f32,
+            top: ((PIXEL_SIZE * scale) * y) as f32,
             len: (PIXEL_SIZE * scale) as f32,
+            color: BLACK,
         }
     }
+
     fn hovered(&self, pos: (f32, f32)) -> bool {
         pos.0 > self.left
             && pos.0 < (self.left + self.len)
@@ -48,12 +58,21 @@ impl Cell {
     }
 }
 
-fn handle_click(canvas: &mut Canvas, color: Color, scale: usize) {
+fn lighten(color: Color) -> Color {
+    Color {
+        r: color.r,
+        g: color.g,
+        b: color.b,
+        a: color.a * 0.8,
+    }
+}
+
+fn handle_click(canvas: &mut Canvas, color: Color, cell_size: usize) {
     let pos = mouse_position();
     let pressed = is_mouse_button_pressed(MouseButton::Left);
     for y in 0..canvas.len() {
         for x in 0..canvas[0].len() {
-            let cell = Cell::new(scale, x, y);
+            let cell = Cell::new(cell_size, x, y);
             if cell.hovered(pos) && pressed {
                 canvas[y][x] = if canvas[y][x] == color { BLACK } else { color };
             }
@@ -61,12 +80,12 @@ fn handle_click(canvas: &mut Canvas, color: Color, scale: usize) {
     }
 }
 
-fn draw_canvas(canvas: &Canvas, color: Color, scale: usize) {
+fn draw_canvas(canvas: &Canvas, color: Color, cell_size: usize, x_offset: usize, y_offset: usize) {
     let pos = mouse_position();
     for y in 0..canvas.len() {
         for x in 0..canvas[0].len() {
             let cell_color;
-            let cell = Cell::new(scale, x, y);
+            let cell = Cell::new(cell_size, x + x_offset, y + y_offset);
             if cell.hovered(pos) {
                 cell_color = Color {
                     r: color.r,
@@ -80,6 +99,9 @@ fn draw_canvas(canvas: &Canvas, color: Color, scale: usize) {
                 cell_color = BLACK;
             }
             draw_rectangle(cell.left, cell.top, cell.len, cell.len, cell_color);
+            draw_rectangle_lines(
+                cell.left, cell.top, cell.len, cell.len, GAP as f32, DARK_GRAY,
+            );
         }
     }
 }
@@ -89,26 +111,61 @@ async fn draw_ui(
     init_canvas: &mut Canvas,
     color: &mut Color,
     file_name: &String,
+    font: &HashMap<String, Texture2D>,
 ) {
-    draw_line(WIDTH - 100. - 5., 0., WIDTH - 100. - 5., HEIGHT, 5., BLACK);
-    let buttons = vec![
-        "reset", "clear", "black", "red", "green", "yellow", "blue", "purple", "cyan", "white",
-        "save",
+    draw_line(
+        (CANVAS_AREA + GAP * 2) as f32,
+        0.,
+        (CANVAS_AREA + GAP * 2) as f32,
+        HEIGHT,
+        5.,
+        BLACK,
+    );
+    let colors = vec![
+        vec![BLACK, RED, GREEN, BLUE, PURPLE],
+        vec![WHITE, ORANGE, YELLOW, CYAN, TRANSPARENT_BG],
     ];
+
+    let text = fontify(font, &"Colors".to_string()).await;
+    write_text(
+        text.clone(),
+        (WIDTH - FONT_SIZE * text.len() as f32) as f32 - 10.,
+        GAP as f32,
+    );
+    let cell_size = 30.;
+    let cells = WIDTH / cell_size;
+    for y in 0..colors.len() {
+        for x in 0..colors[y].len() {
+            let cell = Cell::new(
+                cell_size as usize,
+                x + (cells - colors[y].len() as f32) as usize,
+                y + 1,
+            );
+            if cell.hovered(mouse_position()) {
+                draw_rectangle(
+                    cell.left,
+                    cell.top,
+                    cell.len,
+                    cell.len,
+                    lighten(colors[y][x]),
+                );
+                if is_mouse_button_pressed(MouseButton::Left) {
+                    *color = colors[y][x];
+                }
+            } else {
+                draw_rectangle(cell.left, cell.top, cell.len, cell.len, colors[y][x]);
+            }
+        }
+    }
+
+    let buttons = vec!["reset", "clear", "save"];
     let mut button_list: Vec<widgets::Button<'_>> = vec![];
     buttons.into_iter().enumerate().for_each(|(i, s)| {
-        button_list
-            .push(widgets::Button::new(s).position(vec2(WIDTH - 100., i as f32 * 25. + 10.)));
+        button_list.push(
+            widgets::Button::new(s).position(vec2(CANVAS_AREA as f32 + 10., i as f32 * 25. + 40.)),
+        );
     });
-    let save = button_list.remove(10);
-    let white = button_list.remove(9);
-    let cyan = button_list.remove(8);
-    let purple = button_list.remove(7);
-    let blue = button_list.remove(6);
-    let yellow = button_list.remove(5);
-    let green = button_list.remove(4);
-    let red = button_list.remove(3);
-    let black = button_list.remove(2);
+    let save = button_list.remove(2);
     let clear = button_list.remove(1);
     let reset = button_list.remove(0);
 
@@ -118,32 +175,101 @@ async fn draw_ui(
     if clear.ui(&mut root_ui()) {
         *canvas = vec![vec![BLACK; canvas.len()]; canvas[0].len()]
     }
-    if black.ui(&mut root_ui()) {
-        *color = BLACK;
-    }
-    if red.ui(&mut root_ui()) {
-        *color = RED;
-    }
-    if green.ui(&mut root_ui()) {
-        *color = GREEN;
-    }
-    if yellow.ui(&mut root_ui()) {
-        *color = YELLOW;
-    }
-    if blue.ui(&mut root_ui()) {
-        *color = BLUE;
-    }
-    if purple.ui(&mut root_ui()) {
-        *color = PURPLE;
-    }
-    if cyan.ui(&mut root_ui()) {
-        *color = CYAN;
-    }
-    if white.ui(&mut root_ui()) {
-        *color = WHITE;
-    }
     if save.ui(&mut root_ui()) {
         export(canvas.to_owned(), file_name).await;
+    }
+
+    let x = GAP as f32;
+    let y = (CANVAS_AREA - GAP) as f32;
+
+    draw_rectangle(GAP as f32, y, (CANVAS_AREA - 3) as f32, CMD_AREA, BLACK);
+    let text = fontify(&font, file_name).await;
+    write_text(text, x, y);
+}
+
+async fn fontify(font: &HashMap<String, Texture2D>, input: &String) -> Vec<Texture2D> {
+    let mut text: Vec<Texture2D> = vec![];
+    for i in input.chars() {
+        if i.is_ascii_alphabetic() {
+            let t = font.get(&i.to_string());
+            if let Some(c) = t {
+                text.push(c.clone());
+            }
+        } else if i.is_whitespace() {
+            let space = font.get("space").unwrap();
+            text.push(space.to_owned());
+        } else {
+            match i {
+                ':' => {
+                    let icon = font.get("colon").unwrap();
+                    text.push(icon.to_owned());
+                }
+                ';' => {
+                    let icon = font.get("semicolon").unwrap();
+                    text.push(icon.to_owned());
+                }
+                '-' => {
+                    let icon = font.get("minus").unwrap();
+                    text.push(icon.to_owned());
+                }
+                '(' => {
+                    let icon = font.get("lparen").unwrap();
+                    text.push(icon.to_owned());
+                }
+                ')' => {
+                    let icon = font.get("rparen").unwrap();
+                    text.push(icon.to_owned());
+                }
+                '*' => {
+                    let icon = font.get("star").unwrap();
+                    text.push(icon.to_owned());
+                }
+                '.' => {
+                    let icon = font.get("period").unwrap();
+                    text.push(icon.to_owned());
+                }
+                '/' => {
+                    let icon = font.get("forward_slash").unwrap();
+                    text.push(icon.to_owned());
+                }
+                '_' => {
+                    let icon = font.get("underscore").unwrap();
+                    text.push(icon.to_owned());
+                }
+                _ => println!("{} Not implemented", i),
+            }
+        }
+    }
+    let input = "../images/green_block.png";
+    let img = load_image(&input).await;
+    let cursor: Texture2D;
+
+    if let Ok(img) = img {
+        cursor = Texture2D::from_image(&img);
+        cursor.set_filter(FilterMode::Nearest);
+    }
+    text
+}
+
+fn write_text(text: Vec<Texture2D>, x: f32, y: f32) {
+    for i in 0..text.len() {
+        draw_texture_ex(
+            &text[i],
+            x + FONT_SIZE * i as f32,
+            y + GAP as f32,
+            WHITE,
+            DrawTextureParams {
+                dest_size: Some(Vec2 {
+                    x: FONT_SIZE,
+                    y: FONT_SIZE,
+                }),
+                source: None,
+                rotation: 0.,
+                flip_x: false,
+                flip_y: false,
+                pivot: None,
+            },
+        );
     }
 }
 
@@ -317,99 +443,6 @@ async fn load_font() -> HashMap<String, Texture2D> {
     font
 }
 
-async fn test(font: &HashMap<String, Texture2D>, file_name: &String, pixels: f32) {
-    let mut test_text: Vec<Texture2D> = vec![];
-    for i in file_name.chars() {
-        if i.is_ascii_alphabetic() {
-            let t = font.get(&i.to_string());
-            if let Some(c) = t {
-                test_text.push(c.clone());
-            }
-        } else if i.is_whitespace() {
-            let space = font.get("space").unwrap();
-            test_text.push(space.to_owned());
-        } else {
-            match i {
-                ':' => {
-                    let icon = font.get("colon").unwrap();
-                    test_text.push(icon.to_owned());
-                }
-                ';' => {
-                    let icon = font.get("semicolon").unwrap();
-                    test_text.push(icon.to_owned());
-                }
-                '-' => {
-                    let icon = font.get("minus").unwrap();
-                    test_text.push(icon.to_owned());
-                }
-                '(' => {
-                    let icon = font.get("lparen").unwrap();
-                    test_text.push(icon.to_owned());
-                }
-                ')' => {
-                    let icon = font.get("rparen").unwrap();
-                    test_text.push(icon.to_owned());
-                }
-                '*' => {
-                    let icon = font.get("star").unwrap();
-                    test_text.push(icon.to_owned());
-                }
-                '.' => {
-                    let icon = font.get("period").unwrap();
-                    test_text.push(icon.to_owned());
-                }
-                '/' => {
-                    let icon = font.get("forward_slash").unwrap();
-                    test_text.push(icon.to_owned());
-                }
-                '_' => {
-                    let icon = font.get("underscore").unwrap();
-                    test_text.push(icon.to_owned());
-                }
-                _ => println!("{} Not implemented", i),
-            }
-        }
-    }
-    let x = 0.;
-    let y = (CANVAS_AREA) as f32;
-
-    draw_rectangle(
-        GAP as f32,
-        y - 3.,
-        CANVAS_AREA as f32 - pixels + GAP as f32,
-        CMD_AREA,
-        BLACK,
-    );
-    let file_name = "../images/green_block.png";
-    let img = load_image(&file_name).await;
-    let cursor: Texture2D;
-
-    if let Ok(img) = img {
-        cursor = Texture2D::from_image(&img);
-        cursor.set_filter(FilterMode::Nearest);
-    }
-
-    for i in 0..test_text.len() {
-        draw_texture_ex(
-            &test_text[i],
-            x + FONT_SIZE * i as f32,
-            y,
-            WHITE,
-            DrawTextureParams {
-                dest_size: Some(Vec2 {
-                    x: FONT_SIZE,
-                    y: FONT_SIZE,
-                }),
-                source: None,
-                rotation: 0.,
-                flip_x: false,
-                flip_y: false,
-                pivot: None,
-            },
-        );
-    }
-}
-
 #[macroquad::main("Sprite Editor")]
 async fn main() {
     let mut pixels = 8;
@@ -443,15 +476,14 @@ async fn main() {
     } else {
         panic!("Must provide a file path");
     }
-    let scale = (CANVAS_AREA - canvas.len()) / canvas.len();
+    let cell_size = (CANVAS_AREA - canvas.len()) / canvas.len();
     let font = load_font().await;
     loop {
         request_new_screen_size(WIDTH, HEIGHT);
         clear_background(DARK_GRAY);
-        handle_click(&mut canvas, color, scale);
-        draw_canvas(&canvas, color, scale);
-        draw_ui(&mut canvas, &mut init_canvas, &mut color, file_name).await;
-        test(&font, file_name, pixels as f32).await;
+        handle_click(&mut canvas, color, cell_size);
+        draw_canvas(&canvas, color, cell_size, 0, 0);
+        draw_ui(&mut canvas, &mut init_canvas, &mut color, file_name, &font).await;
         next_frame().await
     }
 }
