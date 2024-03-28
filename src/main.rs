@@ -124,12 +124,6 @@ async fn draw_ui(
         vec![WHITE, ORANGE, YELLOW, CYAN, TRANSPARENT_BG],
     ];
 
-    let text = fontify(font, &"+-<>0456789".to_string()).await;
-    write_text(
-        text.clone(),
-        (WIDTH - FONT_SIZE * text.len() as f32) as f32 - 10.,
-        HEIGHT - 50.,
-    );
     let text = fontify(font, &"Colors".to_string()).await;
     write_text(
         text.clone(),
@@ -270,6 +264,10 @@ async fn fontify(font: &HashMap<String, Texture2D>, input: &String) -> Vec<Textu
                     let icon = font.get("forward_slash").unwrap();
                     text.push(icon.to_owned());
                 }
+                '\\' => {
+                    let icon = font.get("back_slash").unwrap();
+                    text.push(icon.to_owned());
+                }
                 '_' => {
                     let icon = font.get("underscore").unwrap();
                     text.push(icon.to_owned());
@@ -370,7 +368,7 @@ async fn export(canvas: Canvas, file_name: &String) {
     println!("SAVED");
 }
 
-async fn get_font(font: &mut HashMap<String, Texture2D>, file_name: String) {
+async fn get_icon(font: &mut HashMap<String, Texture2D>, file_name: String) {
     let img = load_image(&format!("../images/{}.png", file_name)).await;
 
     if let Ok(img) = img {
@@ -387,7 +385,7 @@ async fn load_font() -> HashMap<String, Texture2D> {
         for i in d {
             let f = i.ok().unwrap();
             if let Some(f) = Path::new(&f.file_name()).file_stem() {
-                get_font(&mut font, f.to_str().unwrap().to_string()).await;
+                get_icon(&mut font, f.to_str().unwrap().to_string()).await;
             }
         }
     }
