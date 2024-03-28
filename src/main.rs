@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env, path::Path};
+use std::{collections::HashMap, env, fs::read_dir, path::Path};
 
 use macroquad::{
     prelude::*,
@@ -37,7 +37,6 @@ struct Cell {
     left: f32,
     top: f32,
     len: f32,
-    color: Color,
 }
 
 impl Cell {
@@ -46,7 +45,6 @@ impl Cell {
             left: ((PIXEL_SIZE * scale) * x) as f32,
             top: ((PIXEL_SIZE * scale) * y) as f32,
             len: (PIXEL_SIZE * scale) as f32,
-            color: BLACK,
         }
     }
 
@@ -126,6 +124,12 @@ async fn draw_ui(
         vec![WHITE, ORANGE, YELLOW, CYAN, TRANSPARENT_BG],
     ];
 
+    let text = fontify(font, &"+-<>0456789".to_string()).await;
+    write_text(
+        text.clone(),
+        (WIDTH - FONT_SIZE * text.len() as f32) as f32 - 10.,
+        HEIGHT - 50.,
+    );
     let text = fontify(font, &"Colors".to_string()).await;
     write_text(
         text.clone(),
@@ -191,15 +195,37 @@ async fn fontify(font: &HashMap<String, Texture2D>, input: &String) -> Vec<Textu
     let mut text: Vec<Texture2D> = vec![];
     for i in input.chars() {
         if i.is_ascii_alphabetic() {
-            let t = font.get(&i.to_string());
+            let t;
+            if i.is_uppercase() {
+                t = font.get(&format!("{}_upper", i.to_lowercase()));
+            } else {
+                t = font.get(&format!("{}_lower", i));
+            }
             if let Some(c) = t {
                 text.push(c.clone());
             }
         } else if i.is_whitespace() {
             let space = font.get("space").unwrap();
             text.push(space.to_owned());
+        } else if i.is_digit(10) {
+            let icon = font.get(&i.to_string());
+            if let Some(t) = icon {
+                text.push(t.to_owned());
+            }
         } else {
             match i {
+                '=' => {
+                    let icon = font.get(&i.to_string());
+                    if let Some(t) = icon {
+                        text.push(t.to_owned());
+                    }
+                }
+                '+' => {
+                    let icon = font.get(&i.to_string());
+                    if let Some(t) = icon {
+                        text.push(t.to_owned());
+                    }
+                }
                 ':' => {
                     let icon = font.get("colon").unwrap();
                     text.push(icon.to_owned());
@@ -220,6 +246,18 @@ async fn fontify(font: &HashMap<String, Texture2D>, input: &String) -> Vec<Textu
                     let icon = font.get("rparen").unwrap();
                     text.push(icon.to_owned());
                 }
+                '<' => {
+                    let icon = font.get("lt");
+                    if let Some(t) = icon {
+                        text.push(t.to_owned());
+                    }
+                }
+                '>' => {
+                    let icon = font.get("gt");
+                    if let Some(t) = icon {
+                        text.push(t.to_owned());
+                    }
+                }
                 '*' => {
                     let icon = font.get("star").unwrap();
                     text.push(icon.to_owned());
@@ -234,6 +272,10 @@ async fn fontify(font: &HashMap<String, Texture2D>, input: &String) -> Vec<Textu
                 }
                 '_' => {
                     let icon = font.get("underscore").unwrap();
+                    text.push(icon.to_owned());
+                }
+                '$' => {
+                    let icon = font.get("$").unwrap();
                     text.push(icon.to_owned());
                 }
                 _ => println!("{} Not implemented", i),
@@ -328,116 +370,26 @@ async fn export(canvas: Canvas, file_name: &String) {
     println!("SAVED");
 }
 
+async fn get_font(font: &mut HashMap<String, Texture2D>, file_name: String) {
+    let img = load_image(&format!("../images/{}.png", file_name)).await;
+
+    if let Ok(img) = img {
+        let t = Texture2D::from_image(&img);
+        t.set_filter(FilterMode::Nearest);
+        font.insert(file_name, t);
+    }
+}
+
 async fn load_font() -> HashMap<String, Texture2D> {
     let mut font: HashMap<String, Texture2D> = HashMap::new();
-    for i in 'A'..='Z' {
-        let file_name = format!("../images/{}.png", i);
-        let img = load_image(&file_name).await;
-
-        if let Ok(img) = img {
-            let t = Texture2D::from_image(&img);
-            t.set_filter(FilterMode::Nearest);
-            font.insert(i.to_string(), t);
+    let png = read_dir(Path::new("../images/"));
+    if let Ok(d) = png {
+        for i in d {
+            let f = i.ok().unwrap();
+            if let Some(f) = Path::new(&f.file_name()).file_stem() {
+                get_font(&mut font, f.to_str().unwrap().to_string()).await;
+            }
         }
-    }
-    for i in 'a'..='z' {
-        let file_name = format!("../images/{}_lower.png", i);
-        let img = load_image(&file_name).await;
-
-        if let Ok(img) = img {
-            let t = Texture2D::from_image(&img);
-            t.set_filter(FilterMode::Nearest);
-            font.insert(i.to_string(), t);
-        }
-    }
-    let file_name = "../images/space.png";
-    let img = load_image(&file_name).await;
-
-    if let Ok(img) = img {
-        let t = Texture2D::from_image(&img);
-        t.set_filter(FilterMode::Nearest);
-        font.insert("space".to_string(), t);
-    }
-
-    let file_name = "../images/minus.png";
-    let img = load_image(&file_name).await;
-
-    if let Ok(img) = img {
-        let t = Texture2D::from_image(&img);
-        t.set_filter(FilterMode::Nearest);
-        font.insert("minus".to_string(), t);
-    }
-
-    let file_name = "../images/colon.png";
-    let img = load_image(&file_name).await;
-
-    if let Ok(img) = img {
-        let t = Texture2D::from_image(&img);
-        t.set_filter(FilterMode::Nearest);
-        font.insert("colon".to_string(), t);
-    }
-
-    let file_name = "../images/semicolon.png";
-    let img = load_image(&file_name).await;
-
-    if let Ok(img) = img {
-        let t = Texture2D::from_image(&img);
-        t.set_filter(FilterMode::Nearest);
-        font.insert("semicolon".to_string(), t);
-    }
-
-    let file_name = "../images/lparen.png";
-    let img = load_image(&file_name).await;
-
-    if let Ok(img) = img {
-        let t = Texture2D::from_image(&img);
-        t.set_filter(FilterMode::Nearest);
-        font.insert("lparen".to_string(), t);
-    }
-
-    let file_name = "../images/rparen.png";
-    let img = load_image(&file_name).await;
-
-    if let Ok(img) = img {
-        let t = Texture2D::from_image(&img);
-        t.set_filter(FilterMode::Nearest);
-        font.insert("rparen".to_string(), t);
-    }
-
-    let file_name = "../images/star.png";
-    let img = load_image(&file_name).await;
-
-    if let Ok(img) = img {
-        let t = Texture2D::from_image(&img);
-        t.set_filter(FilterMode::Nearest);
-        font.insert("star".to_string(), t);
-    }
-
-    let file_name = "../images/forward_slash.png";
-    let img = load_image(&file_name).await;
-
-    if let Ok(img) = img {
-        let t = Texture2D::from_image(&img);
-        t.set_filter(FilterMode::Nearest);
-        font.insert("forward_slash".to_string(), t);
-    }
-
-    let file_name = "../images/period.png";
-    let img = load_image(&file_name).await;
-
-    if let Ok(img) = img {
-        let t = Texture2D::from_image(&img);
-        t.set_filter(FilterMode::Nearest);
-        font.insert("period".to_string(), t);
-    }
-
-    let file_name = "../images/underscore.png";
-    let img = load_image(&file_name).await;
-
-    if let Ok(img) = img {
-        let t = Texture2D::from_image(&img);
-        t.set_filter(FilterMode::Nearest);
-        font.insert("underscore".to_string(), t);
     }
 
     font
@@ -487,3 +439,18 @@ async fn main() {
         next_frame().await
     }
 }
+
+// fn conv() {
+//     for i in 'a'..='z' {
+//         let path = format!("../images/{}.png", i);
+//         if Path::new(&path).exists() {
+//             let new_path = format!("../images/{}_upper.png", i);
+//             let output = std::process::Command::new("mv")
+//                 .arg(path)
+//                 .arg(new_path)
+//                 .output()
+//                 .expect("Failed");
+//             println!("{:?}", output);
+//         }
+//     }
+// }
